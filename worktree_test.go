@@ -88,7 +88,7 @@ func (s *WorktreeSuite) TestPullFastForward(c *C) {
 
 	w, err := server.Worktree()
 	c.Assert(err, IsNil)
-	err = os.WriteFile(filepath.Join(url, "foo"), []byte("foo"), 0755)
+	err = os.WriteFile(filepath.Join(url, "foo"), []byte("foo"), 0o755)
 	c.Assert(err, IsNil)
 	w.Add("foo")
 	hash, err := w.Commit("foo", &CommitOptions{Author: defaultSignature()})
@@ -124,7 +124,7 @@ func (s *WorktreeSuite) TestPullNonFastForward(c *C) {
 
 	w, err := server.Worktree()
 	c.Assert(err, IsNil)
-	err = os.WriteFile(filepath.Join(url, "foo"), []byte("foo"), 0755)
+	err = os.WriteFile(filepath.Join(url, "foo"), []byte("foo"), 0o755)
 	c.Assert(err, IsNil)
 	w.Add("foo")
 	_, err = w.Commit("foo", &CommitOptions{Author: defaultSignature()})
@@ -132,7 +132,7 @@ func (s *WorktreeSuite) TestPullNonFastForward(c *C) {
 
 	w, err = r.Worktree()
 	c.Assert(err, IsNil)
-	err = os.WriteFile(filepath.Join(dir, "bar"), []byte("bar"), 0755)
+	err = os.WriteFile(filepath.Join(dir, "bar"), []byte("bar"), 0o755)
 	c.Assert(err, IsNil)
 	w.Add("bar")
 	_, err = w.Commit("bar", &CommitOptions{Author: defaultSignature()})
@@ -295,7 +295,7 @@ func (s *WorktreeSuite) TestPullAlreadyUptodate(c *C) {
 
 	w, err := r.Worktree()
 	c.Assert(err, IsNil)
-	err = util.WriteFile(fs, "bar", []byte("bar"), 0755)
+	err = util.WriteFile(fs, "bar", []byte("bar"), 0o755)
 	c.Assert(err, IsNil)
 	w.Add("bar")
 	_, err = w.Commit("bar", &CommitOptions{Author: defaultSignature()})
@@ -527,7 +527,7 @@ func (s *WorktreeSuite) TestFilenameNormalization(c *C) {
 	c.Assert(err, IsNil)
 
 	writeFile := func(path string) {
-		err := util.WriteFile(w.Filesystem, path, []byte("foo"), 0755)
+		err := util.WriteFile(w.Filesystem, path, []byte("foo"), 0o755)
 		c.Assert(err, IsNil)
 	}
 
@@ -624,7 +624,7 @@ func (s *WorktreeSuite) TestCheckoutRelativePathSubmoduleInitialized(c *C) {
 	r := s.NewRepository(fixtures.ByURL(url).One())
 
 	// modify the .gitmodules from original one
-	file, err := r.wt.OpenFile(".gitmodules", os.O_WRONLY|os.O_TRUNC, 0666)
+	file, err := r.wt.OpenFile(".gitmodules", os.O_WRONLY|os.O_TRUNC, 0o666)
 	c.Assert(err, IsNil)
 
 	n, err := io.WriteString(file, `[submodule "basic"]
@@ -749,6 +749,39 @@ func (s *WorktreeSuite) TestCheckoutBranch(c *C) {
 
 	status, err := w.Status()
 	c.Assert(err, IsNil)
+	c.Assert(status.IsClean(), Equals, true)
+}
+
+func (s *WorktreeSuite) TestCheckoutBranchUntracked(c *C) {
+	w := &Worktree{
+		r:          s.Repository,
+		Filesystem: memfs.New(),
+	}
+
+	uf, err := w.Filesystem.Create("untracked_file")
+	c.Assert(err, IsNil)
+	_, err = uf.Write([]byte("don't delete me"))
+	c.Assert(err, IsNil)
+
+	err = w.Checkout(&CheckoutOptions{
+		Branch: "refs/heads/branch",
+	})
+	c.Assert(err, IsNil)
+
+	head, err := w.r.Head()
+	c.Assert(err, IsNil)
+	c.Assert("refs/heads/branch", Equals, head.Name().String())
+
+	status, err := w.Status()
+	c.Assert(err, IsNil)
+	// The untracked file should still be there, so it's not clean
+	c.Assert(status.IsClean(), Equals, false)
+	c.Assert(status.IsUntracked("untracked_file"), Equals, true)
+	err = w.Filesystem.Remove("untracked_file")
+	c.Assert(err, IsNil)
+	status, err = w.Status()
+	c.Assert(err, IsNil)
+	// After deleting the untracked file it should now be clean
 	c.Assert(status.IsClean(), Equals, true)
 }
 
@@ -996,7 +1029,7 @@ func (s *WorktreeSuite) TestStatusCheckedInBeforeIgnored(c *C) {
 	w, err := r.Worktree()
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(fs, "fileToIgnore", []byte("Initial data"), 0755)
+	err = util.WriteFile(fs, "fileToIgnore", []byte("Initial data"), 0o755)
 	c.Assert(err, IsNil)
 	_, err = w.Add("fileToIgnore")
 	c.Assert(err, IsNil)
@@ -1004,7 +1037,7 @@ func (s *WorktreeSuite) TestStatusCheckedInBeforeIgnored(c *C) {
 	_, err = w.Commit("Added file that will be ignored later", defaultTestCommitOptions())
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(fs, ".gitignore", []byte("fileToIgnore\nsecondIgnoredFile"), 0755)
+	err = util.WriteFile(fs, ".gitignore", []byte("fileToIgnore\nsecondIgnoredFile"), 0o755)
 	c.Assert(err, IsNil)
 	_, err = w.Add(".gitignore")
 	c.Assert(err, IsNil)
@@ -1015,7 +1048,7 @@ func (s *WorktreeSuite) TestStatusCheckedInBeforeIgnored(c *C) {
 	c.Assert(status.IsClean(), Equals, true)
 	c.Assert(status, NotNil)
 
-	err = util.WriteFile(fs, "secondIgnoredFile", []byte("Should be completely ignored"), 0755)
+	err = util.WriteFile(fs, "secondIgnoredFile", []byte("Should be completely ignored"), 0o755)
 	c.Assert(err, IsNil)
 	status = nil
 	status, err = w.Status()
@@ -1023,7 +1056,7 @@ func (s *WorktreeSuite) TestStatusCheckedInBeforeIgnored(c *C) {
 	c.Assert(status.IsClean(), Equals, true)
 	c.Assert(status, NotNil)
 
-	err = util.WriteFile(fs, "fileToIgnore", []byte("Updated data"), 0755)
+	err = util.WriteFile(fs, "fileToIgnore", []byte("Updated data"), 0o755)
 	c.Assert(err, IsNil)
 	status = nil
 	status, err = w.Status()
@@ -1034,7 +1067,7 @@ func (s *WorktreeSuite) TestStatusCheckedInBeforeIgnored(c *C) {
 
 func (s *WorktreeSuite) TestStatusEmptyDirty(c *C) {
 	fs := memfs.New()
-	err := util.WriteFile(fs, "foo", []byte("foo"), 0755)
+	err := util.WriteFile(fs, "foo", []byte("foo"), 0o755)
 	c.Assert(err, IsNil)
 
 	storage := memory.NewStorage()
@@ -1118,15 +1151,29 @@ func (s *WorktreeSuite) TestResetWithUntracked(c *C) {
 	err := w.Checkout(&CheckoutOptions{})
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(fs, "foo", nil, 0755)
+	err = util.WriteFile(fs, "foo", []byte("bar"), 0o755)
 	c.Assert(err, IsNil)
 
 	err = w.Reset(&ResetOptions{Mode: MergeReset, Commit: commit})
 	c.Assert(err, IsNil)
 
+	contents, err := util.ReadFile(fs, "foo")
+	c.Assert(err, IsNil)
+	c.Assert("bar", Equals, string(contents))
+
 	status, err := w.Status()
 	c.Assert(err, IsNil)
-	c.Assert(status.IsClean(), Equals, true)
+	for file, st := range status {
+		if file == "foo" {
+			c.Assert(Untracked, Equals, st.Worktree)
+			c.Assert(Untracked, Equals, st.Staging)
+			continue
+		}
+		if st.Worktree != Unmodified || st.Staging != Unmodified {
+			c.Logf("file %s not unmodified", file)
+			c.Fail()
+		}
+	}
 }
 
 func (s *WorktreeSuite) TestResetSoft(c *C) {
@@ -1532,7 +1579,7 @@ func (s *WorktreeSuite) TestAddUntracked(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "foo", []byte("FOO"), 0755)
+	err = util.WriteFile(w.Filesystem, "foo", []byte("FOO"), 0o755)
 	c.Assert(err, IsNil)
 
 	hash, err := w.Add("foo")
@@ -1579,7 +1626,7 @@ func (s *WorktreeSuite) TestIgnored(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "foo", []byte("FOO"), 0755)
+	err = util.WriteFile(w.Filesystem, "foo", []byte("FOO"), 0o755)
 	c.Assert(err, IsNil)
 
 	status, err := w.Status()
@@ -1607,7 +1654,7 @@ func (s *WorktreeSuite) TestExcludedNoGitignore(c *C) {
 	w.Excludes = make([]gitignore.Pattern, 0)
 	w.Excludes = append(w.Excludes, gitignore.ParsePattern("foo", nil))
 
-	err = util.WriteFile(w.Filesystem, "foo", []byte("FOO"), 0755)
+	err = util.WriteFile(w.Filesystem, "foo", []byte("FOO"), 0o755)
 	c.Assert(err, IsNil)
 
 	status, err := w.Status()
@@ -1633,7 +1680,7 @@ func (s *WorktreeSuite) TestAddModified(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "LICENSE", []byte("FOO"), 0644)
+	err = util.WriteFile(w.Filesystem, "LICENSE", []byte("FOO"), 0o644)
 	c.Assert(err, IsNil)
 
 	hash, err := w.Add("LICENSE")
@@ -1847,7 +1894,7 @@ func (s *WorktreeSuite) TestAddSymlink(c *C) {
 
 	r, err := PlainInit(dir, false)
 	c.Assert(err, IsNil)
-	err = util.WriteFile(r.wt, "foo", []byte("qux"), 0644)
+	err = util.WriteFile(r.wt, "foo", []byte("qux"), 0o644)
 	c.Assert(err, IsNil)
 	err = r.wt.Symlink("foo", "bar")
 	c.Assert(err, IsNil)
@@ -1882,9 +1929,9 @@ func (s *WorktreeSuite) TestAddDirectory(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "qux/foo", []byte("FOO"), 0755)
+	err = util.WriteFile(w.Filesystem, "qux/foo", []byte("FOO"), 0o755)
 	c.Assert(err, IsNil)
-	err = util.WriteFile(w.Filesystem, "qux/baz/bar", []byte("BAR"), 0755)
+	err = util.WriteFile(w.Filesystem, "qux/baz/bar", []byte("BAR"), 0o755)
 	c.Assert(err, IsNil)
 
 	h, err := w.Add("qux")
@@ -1939,13 +1986,13 @@ func (s *WorktreeSuite) TestAddAll(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "file1", []byte("file1"), 0644)
+	err = util.WriteFile(w.Filesystem, "file1", []byte("file1"), 0o644)
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(w.Filesystem, "file2", []byte("file2"), 0644)
+	err = util.WriteFile(w.Filesystem, "file2", []byte("file2"), 0o644)
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(w.Filesystem, "file3", []byte("ignore me"), 0644)
+	err = util.WriteFile(w.Filesystem, "file3", []byte("ignore me"), 0o644)
 	c.Assert(err, IsNil)
 
 	w.Excludes = make([]gitignore.Pattern, 0)
@@ -1985,11 +2032,11 @@ func (s *WorktreeSuite) TestAddGlob(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "qux/qux", []byte("QUX"), 0755)
+	err = util.WriteFile(w.Filesystem, "qux/qux", []byte("QUX"), 0o755)
 	c.Assert(err, IsNil)
-	err = util.WriteFile(w.Filesystem, "qux/baz", []byte("BAZ"), 0755)
+	err = util.WriteFile(w.Filesystem, "qux/baz", []byte("BAZ"), 0o755)
 	c.Assert(err, IsNil)
-	err = util.WriteFile(w.Filesystem, "qux/bar/baz", []byte("BAZ"), 0755)
+	err = util.WriteFile(w.Filesystem, "qux/bar/baz", []byte("BAZ"), 0o755)
 	c.Assert(err, IsNil)
 
 	err = w.AddWithOptions(&AddOptions{Glob: w.Filesystem.Join("qux", "b*")})
@@ -2081,7 +2128,6 @@ func (s *WorktreeSuite) TestAddFilenameStartingWithDot(c *C) {
 	file = status.File("foo/bar/baz")
 	c.Assert(file.Staging, Equals, Added)
 	c.Assert(file.Worktree, Equals, Unmodified)
-
 }
 
 func (s *WorktreeSuite) TestAddGlobErrorNoMatches(c *C) {
@@ -2106,7 +2152,7 @@ func (s *WorktreeSuite) TestAddSkipStatusAddedPath(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "file1", []byte("file1"), 0644)
+	err = util.WriteFile(w.Filesystem, "file1", []byte("file1"), 0o644)
 	c.Assert(err, IsNil)
 
 	err = w.AddWithOptions(&AddOptions{Path: "file1", SkipStatus: true})
@@ -2143,7 +2189,7 @@ func (s *WorktreeSuite) TestAddSkipStatusModifiedPath(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(w.Filesystem, "LICENSE", []byte("file1"), 0644)
+	err = util.WriteFile(w.Filesystem, "LICENSE", []byte("file1"), 0o644)
 	c.Assert(err, IsNil)
 
 	err = w.AddWithOptions(&AddOptions{Path: "LICENSE", SkipStatus: true})
@@ -2214,14 +2260,14 @@ func (s *WorktreeSuite) TestAddSkipStatusWithIgnoredPath(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(idx.Entries, HasLen, 9)
 
-	err = util.WriteFile(fs, ".gitignore", []byte("fileToIgnore\n"), 0755)
+	err = util.WriteFile(fs, ".gitignore", []byte("fileToIgnore\n"), 0o755)
 	c.Assert(err, IsNil)
 	_, err = w.Add(".gitignore")
 	c.Assert(err, IsNil)
 	_, err = w.Commit("Added .gitignore", defaultTestCommitOptions())
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(fs, "fileToIgnore", []byte("file to ignore"), 0644)
+	err = util.WriteFile(fs, "fileToIgnore", []byte("file to ignore"), 0o644)
 	c.Assert(err, IsNil)
 
 	status, err := w.Status()
@@ -2321,7 +2367,7 @@ func (s *WorktreeSuite) TestRemoveDirectoryUntracked(c *C) {
 	err := w.Checkout(&CheckoutOptions{Force: true})
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(w.Filesystem, "json/foo", []byte("FOO"), 0755)
+	err = util.WriteFile(w.Filesystem, "json/foo", []byte("FOO"), 0o755)
 	c.Assert(err, IsNil)
 
 	hash, err := w.Remove("json")
@@ -2417,7 +2463,7 @@ func (s *WorktreeSuite) TestRemoveGlobDirectoryDeleted(c *C) {
 	err = fs.Remove("json/short.json")
 	c.Assert(err, IsNil)
 
-	err = util.WriteFile(w.Filesystem, "json/foo", []byte("FOO"), 0755)
+	err = util.WriteFile(w.Filesystem, "json/foo", []byte("FOO"), 0o755)
 	c.Assert(err, IsNil)
 
 	err = w.RemoveGlob("js*")
@@ -2449,7 +2495,6 @@ func (s *WorktreeSuite) TestMove(c *C) {
 	c.Assert(status, HasLen, 2)
 	c.Assert(status.File("LICENSE").Staging, Equals, Deleted)
 	c.Assert(status.File("foo").Staging, Equals, Added)
-
 }
 
 func (s *WorktreeSuite) TestMoveNotExistentEntry(c *C) {
@@ -3208,7 +3253,7 @@ func setupForRestore(c *C, s *WorktreeSuite) (fs billy.Filesystem, w *Worktree, 
 
 	// Touch of bunch of files including create a new file and delete an exsiting file
 	for _, name := range names {
-		err = util.WriteFile(fs, name, []byte("Foo Bar"), 0755)
+		err = util.WriteFile(fs, name, []byte("Foo Bar"), 0o755)
 		c.Assert(err, IsNil)
 	}
 	err = util.RemoveAll(fs, names[3])
@@ -3235,9 +3280,9 @@ func setupForRestore(c *C, s *WorktreeSuite) (fs billy.Filesystem, w *Worktree, 
 	})
 
 	// Add secondary changes to a file to make sure we only restore the staged file
-	err = util.WriteFile(fs, names[1], []byte("Foo Bar:11"), 0755)
+	err = util.WriteFile(fs, names[1], []byte("Foo Bar:11"), 0o755)
 	c.Assert(err, IsNil)
-	err = util.WriteFile(fs, names[2], []byte("Foo Bar:22"), 0755)
+	err = util.WriteFile(fs, names[2], []byte("Foo Bar:22"), 0o755)
 	c.Assert(err, IsNil)
 
 	verifyStatus(c, "Secondary Edits", w, names, []FileStatus{
@@ -3348,7 +3393,6 @@ func (s *WorktreeSuite) TestRestoreBoth(c *C) {
 }
 
 func TestFilePermissions(t *testing.T) {
-
 	// Initialize an in memory repository
 	remoteUrl := t.TempDir()
 
@@ -3359,10 +3403,10 @@ func TestFilePermissions(t *testing.T) {
 	remoteRepository, err := Init(remoteStorage, inMemoryFs)
 	assert.NoError(t, err)
 
-	err = util.WriteFile(inMemoryFs, "fileWithExecuteBit", []byte("Initial data"), 0755)
+	err = util.WriteFile(inMemoryFs, "fileWithExecuteBit", []byte("Initial data"), 0o755)
 	assert.NoError(t, err)
 
-	err = util.WriteFile(inMemoryFs, "regularFile", []byte("Initial data"), 0644)
+	err = util.WriteFile(inMemoryFs, "regularFile", []byte("Initial data"), 0o644)
 	assert.NoError(t, err)
 
 	remoteWorktree, err := remoteRepository.Worktree()
@@ -3405,5 +3449,4 @@ func TestFilePermissions(t *testing.T) {
 		assert.Equal(t, expectedEntry.Name, idx.Entries[i].Name)
 		assert.Equal(t, expectedEntry.Mode, idx.Entries[i].Mode)
 	}
-
 }
