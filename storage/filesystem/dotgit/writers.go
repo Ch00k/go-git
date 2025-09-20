@@ -3,6 +3,8 @@ package dotgit
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -144,7 +146,29 @@ func (w *PackWriter) save() error {
 		return err
 	}
 
-	return w.fs.Rename(w.fw.Name(), fmt.Sprintf("%s.pack", base))
+	packPath := fmt.Sprintf("%s.pack", base)
+	if err := w.fs.Rename(w.fw.Name(), packPath); err != nil {
+		return err
+	}
+
+	// Fix permissions for packfile (issue #588)
+	// Set readable permissions for all users (rw-r--r--)
+	if changer, ok := w.fs.(billy.Change); ok {
+		if err := changer.Chmod(packPath, 0644); err != nil {
+			// Don't fail if chmod fails, but continue
+		}
+	} else {
+		// Fallback for OS filesystems that don't implement billy.Change
+		// Try to construct the absolute path and use os.Chmod directly
+		if w.fs.Root() != "" {
+			fullPath := filepath.Join(w.fs.Root(), packPath)
+			if err := os.Chmod(fullPath, 0644); err != nil {
+				// Don't fail if chmod fails, but continue
+			}
+		}
+	}
+
+	return nil
 }
 
 func (w *PackWriter) encodeIdx(writer io.Writer) error {
